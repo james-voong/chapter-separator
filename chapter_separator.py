@@ -18,9 +18,9 @@ def is_blank_page(page) -> bool:
     return text is None or not text.strip()
 
 
-def get_chapter_starts(pdf) -> list[tuple[int, str]]:
+def get_chapter_starts(pdf) -> list[tuple[int, int, str]]:
     """
-    Scan PDF and return list of (page_index_0based, chapter_name) for each chapter.
+    Scan PDF and return list of (page_index_0based, chapter_number, chapter_name) for each chapter.
     Chapters are detected by large font (21-23pt) lines matching "N - Title".
     """
     chapters = []
@@ -46,8 +46,9 @@ def get_chapter_starts(pdf) -> list[tuple[int, str]]:
         line_text = " ".join(line_words)
         m = re.match(r"^(\d+)\s*-\s*(.+)$", line_text.strip())
         if m:
+            chapter_num = int(m.group(1))
             chapter_name = m.group(2).strip()
-            chapters.append((page_idx, chapter_name))
+            chapters.append((page_idx, chapter_num, chapter_name))
     return chapters
 
 
@@ -68,7 +69,7 @@ def split_pdf_by_chapters(input_pdf_path: str, output_dir: str | Path) -> list[s
             raise ValueError("No chapters found (no 'N - Title' lines with large font).")
 
         output_paths = []
-        for i, (start_page_idx, chapter_name) in enumerate(chapter_starts):
+        for i, (start_page_idx, chapter_num, chapter_name) in enumerate(chapter_starts):
             end_page_idx = (
                 chapter_starts[i + 1][0] - 1
                 if i + 1 < len(chapter_starts)
@@ -92,7 +93,8 @@ def split_pdf_by_chapters(input_pdf_path: str, output_dir: str | Path) -> list[s
                 writer.add_page(reader.pages[p])
 
             safe_name = sanitize_filename(chapter_name)
-            out_path = output_dir / f"{i + 1:04d} - {safe_name}.pdf"
+            pad_width = max(4, len(str(chapter_num)))
+            out_path = output_dir / f"{chapter_num:0{pad_width}d} - {safe_name}.pdf"
             with open(out_path, "wb") as f:
                 writer.write(f)
             output_paths.append(str(out_path))
