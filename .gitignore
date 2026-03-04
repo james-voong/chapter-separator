@@ -1,1 +1,7 @@
 .DS_Store
+
+# Keep directory structure only; ignore all contents except .gitkeep
+data/*
+!data/.gitkeep
+chapters/*
+!chapters/.gitkeep
