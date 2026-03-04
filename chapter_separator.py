@@ -4,10 +4,13 @@ import pdfplumber
 from PyPDF2 import PdfWriter, PdfReader
 from pathlib import Path
 
+_RE_UNSAFE_FILENAME = re.compile(r'[<>:"/\\|?*]')
+_RE_CHAPTER_HEADING = re.compile(r"^(\d+)\s*-\s*(.+)$")
+
 
 def sanitize_filename(name: str) -> str:
     """Make a string safe for use as a filename."""
-    name = re.sub(r'[<>:"/\\|?*]', "_", name)
+    name = _RE_UNSAFE_FILENAME.sub("_", name)
     name = name.strip(" .")
     return name or "chapter"
 
@@ -29,12 +32,12 @@ def get_chapter_starts(pdf) -> list[tuple[int, int, str]]:
         if not page_words:
             continue
         sorted_words = sorted(page_words, key=lambda x: (x["top"], x["x0"]))
+        large_words = [w for w in sorted_words if (s := w.get("size")) is not None and 21 <= s <= 23]
+        if not large_words:
+            continue
         line_words = []
         first_top = None
-        for obj in sorted_words:
-            font_size = obj.get("size")
-            if font_size is None or not (21 <= font_size <= 23):
-                continue
+        for obj in large_words:
             top = obj["top"]
             if first_top is None:
                 first_top = top
@@ -43,8 +46,7 @@ def get_chapter_starts(pdf) -> list[tuple[int, int, str]]:
             line_words.append(obj["text"])
         if not line_words:
             continue
-        line_text = " ".join(line_words)
-        m = re.match(r"^(\d+)\s*-\s*(.+)$", line_text.strip())
+        m = _RE_CHAPTER_HEADING.match(" ".join(line_words).strip())
         if m:
             chapter_num = int(m.group(1))
             chapter_name = m.group(2).strip()
