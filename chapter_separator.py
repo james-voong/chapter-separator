@@ -7,7 +7,6 @@ from pathlib import Path
 
 def sanitize_filename(name: str) -> str:
     """Make a string safe for use as a filename."""
-    # Replace invalid path characters with underscore
     name = re.sub(r'[<>:"/\\|?*]', "_", name)
     name = name.strip(" .")
     return name or "chapter"
@@ -30,7 +29,6 @@ def get_chapter_starts(pdf) -> list[tuple[int, str]]:
         if not page_words:
             continue
         sorted_words = sorted(page_words, key=lambda x: (x["top"], x["x0"]))
-        # Collect first "line" of large-font words (same approximate top)
         line_words = []
         first_top = None
         for obj in sorted_words:
@@ -40,13 +38,12 @@ def get_chapter_starts(pdf) -> list[tuple[int, str]]:
             top = obj["top"]
             if first_top is None:
                 first_top = top
-            if abs(top - first_top) > 8:  # New line
+            if abs(top - first_top) > 8:
                 break
             line_words.append(obj["text"])
         if not line_words:
             continue
         line_text = " ".join(line_words)
-        # Match "1 - Reincarnation" or "2 - A.I. Chip"
         m = re.match(r"^(\d+)\s*-\s*(.+)$", line_text.strip())
         if m:
             chapter_name = m.group(2).strip()
@@ -54,21 +51,11 @@ def get_chapter_starts(pdf) -> list[tuple[int, str]]:
     return chapters
 
 
-def split_pdf_by_chapters(
-    input_pdf_path: str,
-    output_dir: str | Path,
-    *,
-    output_prefix: str = "",
-) -> list[str]:
+def split_pdf_by_chapters(input_pdf_path: str, output_dir: str | Path) -> list[str]:
     """
-    Split a combined PDF into one file per chapter.
-    - Chapter boundaries: lines like "1 - Reincarnation", "2 - A.I. Chip".
-    - Each output file is named after the chapter (sanitized), optional prefix.
-    - Leading and trailing blank pages are removed from each chapter.
-    - Each chapter starts at the start of a page (no mid-page splits).
-    Returns list of output file paths.
+    Split a combined PDF into one file per chapter. Detects "N - Title" lines in
+    large font; strips leading/trailing blank pages. Returns output file paths.
     """
-    input_path = Path(input_pdf_path)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -90,25 +77,22 @@ def split_pdf_by_chapters(
             if end_page_idx < start_page_idx:
                 continue
 
-            # Trim leading blank pages
             first = start_page_idx
             while first <= end_page_idx and is_blank_page(pdf.pages[first]):
                 first += 1
-            # Trim trailing blank pages
             last = end_page_idx
             while last >= first and is_blank_page(pdf.pages[last]):
                 last -= 1
 
             if first > last:
-                continue  # Chapter was all blank
+                continue
 
             writer = PdfWriter()
             for p in range(first, last + 1):
                 writer.add_page(reader.pages[p])
 
             safe_name = sanitize_filename(chapter_name)
-            chapter_num = i + 1
-            out_path = output_dir / f"{output_prefix}{chapter_num:04d} - {safe_name}.pdf"
+            out_path = output_dir / f"{i + 1:04d} - {safe_name}.pdf"
             with open(out_path, "wb") as f:
                 writer.write(f)
             output_paths.append(str(out_path))
